@@ -55,26 +55,54 @@ namespace SongDownloader
 
     static class Program
     {
-        private static readonly HttpClient client = new HttpClient();
-        private static string PathToFolder = "";
-        private static SemaphoreSlim semaphoreSlim = new(10,10);
-
-        private static int Downloaded = 0;
-        private static int Total = 0;
-
         public static async Task<int> Main(string[] args)
         {
+            string pathToSongListFile = "";
+            string pathToDownloadFolder = "";
+
             if (args.Length != 2)
             {
-                return 1;
+                Console.WriteLine("SongDownloader.exe \"path to song list\" \"path to download folder\"");
+                do
+                {
+                    Console.Write("path to song list:");
+                    string input = Console.ReadLine() ?? "";
+                    input = input.Replace("\"", "");
+                    if (File.Exists(input))
+                    {
+                        pathToSongListFile = input;
+                        break;
+                    }
+                    else
+                    {
+                        Console.WriteLine("Invalid file");
+                    }
+                } while (true);
+                do
+                {
+                    Console.Write("path to download folder:");
+                    string input = Console.ReadLine() ?? "";
+                    input = input.Replace("\"", "");
+                    if (Directory.Exists(input))
+                    {
+                        pathToDownloadFolder = input;
+                        break;
+                    }
+                    else
+                    {
+                        Console.WriteLine("Invalid folder");
+                    }
+                } while (true);
+            }
+            else
+            {
+                pathToSongListFile = args[0];
+                pathToDownloadFolder = args[1];
             }
 
-            string[] lines = File.ReadAllLines(args[0]);
-            PathToFolder = args[1];
+            string[] lines = File.ReadAllLines(pathToSongListFile);
 
-
-            Downloaded = 0;
-            Total = 0;
+            Downloader Downloader = new(pathToDownloadFolder, 5);
 
             List<Task> downloadTasks = new List<Task>();
 
@@ -85,155 +113,15 @@ namespace SongDownloader
                 if (String.IsNullOrEmpty(songName))
                     continue;
 
-                downloadTasks.Add(DownloadSong(songName));
+                downloadTasks.Add(Downloader.DownloadSong(songName));
             }
 
             await Task.WhenAll(downloadTasks);
 
-            Console.WriteLine($"Download finished {Downloaded}/{Total}.");
+            Console.WriteLine($"Download finished {Downloader.Downloaded}/{Downloader.Total}.");
             Console.ReadLine();
 
             return 0;
-        }
-
-        private static async Task<bool> DownloadSong(string songName)
-        {
-            semaphoreSlim.Wait();
-
-            try
-            {
-                Interlocked.Increment(ref Total);
-
-                Console.WriteLine($"{songName}: Downloading");
-
-                SongData? song = await SearchSong(songName);
-
-                if (song != null)
-                {
-                    try
-                    {
-                        string songFileName = $"{songName.EncodeAsFileName()}.mp3";
-                        string fullFilePath = Path.Combine(PathToFolder, songFileName);
-                        await DownloadSongWithProgressAsync(song.url, fullFilePath);
-                        TagSong(song, fullFilePath);
-
-                        Interlocked.Increment(ref Downloaded);
-                        Console.WriteLine($"{songName}: Downloaded \"{songFileName}\"");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"{songName}: Error downloading song ({ex.Message})");
-                    }
-                }
-                else
-                {
-                    Console.WriteLine($"{songName}: Song not found");
-                }
-            }
-            catch (Exception)
-            {
-                throw;
-            }
-            finally
-            {
-                semaphoreSlim.Release();
-            }
-
-            return true;
-        }
-
-        private static async Task<bool> DownloadSongWithProgressAsync(string songUrl, string savePath)
-        {
-            using (HttpClient client = new HttpClient())
-            {
-                using (HttpResponseMessage response = await client.GetAsync(songUrl, HttpCompletionOption.ResponseHeadersRead))
-                {
-                    response.EnsureSuccessStatusCode();
-
-                    using (Stream contentStream = await response.Content.ReadAsStreamAsync())
-                    {
-                        using (FileStream fileStream = new FileStream(savePath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, true))
-                        {
-                            long? totalBytes = response.Content.Headers.ContentLength;
-
-                            byte[] buffer = new byte[4096];
-                            int bytesRead = 0;
-                            long totalBytesRead = 0;
-                            while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
-                            {
-                                await fileStream.WriteAsync(buffer, 0, bytesRead);
-                                totalBytesRead += bytesRead;
-
-                                if (totalBytes.HasValue)
-                                {
-                                    int progressPercentage = (int)Math.Round((double)totalBytesRead / totalBytes.Value * 100);
-                                    //Console.Write($"\rDownloading {Path.GetFileName(savePath)}: {progressPercentage}%");
-                                }
-                                else
-                                {
-                                    //Console.Write($"\rDownloading {Path.GetFileName(savePath)}: {totalBytesRead / 1024} KB");
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            return true;
-        }
-
-        private static void TagSong(SongData song, string fullFilePath)
-        {
-            TagLib.File f = TagLib.File.Create(fullFilePath);
-            f.Tag.Title = song.title;
-            f.Tag.Performers = new string[] { song.artist };
-            var duration = TimeSpan.FromSeconds((double)song.duration);
-            string len = duration.ToString(@"hh\:mm\:ss");
-            f.Tag.Length = len;
-            f.Save();
-        }
-
-        private static async Task<SongData?> SearchSong(string name)
-        {
-            JsonSerializerOptions options = new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true,
-                UnknownTypeHandling = JsonUnknownTypeHandling.JsonElement,
-
-            };
-
-            string requestUri = "https://new.myfreemp3juices.cc/api/api_search.php";
-            var content = new FormUrlEncodedContent(new[]
-            {
-                new KeyValuePair<string?, string?>("q",  name.Replace(" ", "+")),
-                new KeyValuePair<string?, string?>("sort", "2"),
-                new KeyValuePair<string?, string?>("page", "0"),
-            });
-
-            var response = await client.PostAsync(requestUri, content);
-            var responseString = await response.Content.ReadAsStringAsync();
-            responseString = responseString[1..^4];
-            var Rootobject = JsonSerializer.Deserialize<Rootobject>(responseString, options);
-
-            if (Rootobject != null && (Rootobject?.response.Length ?? 0) > 1)
-            {
-                List<object> objects = Rootobject.response[1..^1].ToList();
-                List<SongData?> songs = objects.Select(o => JsonSerializer.Deserialize<SongData>(o.ToString()!, options)).ToList();
-
-                if (songs != null)
-                {
-                    return songs.FirstOrDefault(s => s != null);
-                }
-
-            }
-
-            return null;
-        }
-
-        public static string EncodeAsFileName(this string fileName)
-        {
-            return Regex.Replace(fileName, "[" + Regex.Escape(
-                    new string(Path.GetInvalidFileNameChars())) + "]", " ");
         }
     }
 }
