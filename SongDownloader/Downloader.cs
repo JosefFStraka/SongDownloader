@@ -38,8 +38,9 @@ namespace SongDownloader
 
         private SemaphoreSlim semaphoreSlim = new(3, 3);
 
-        public Downloader(string PathToDownloadFolder, int maxThreads)
+        public Downloader(string pathToDownloadFolder, int maxThreads)
         {
+            PathToDownloadFolder = pathToDownloadFolder;
             semaphoreSlim = new SemaphoreSlim(maxThreads, maxThreads);
         }
         

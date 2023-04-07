@@ -102,7 +102,7 @@ namespace SongDownloader
 
             string[] lines = File.ReadAllLines(pathToSongListFile);
 
-            Downloader Downloader = new(pathToDownloadFolder, 1);
+            Downloader Downloader = new(pathToDownloadFolder, 5);
             Downloader.DownloadProgressStatus += (string songName, DownloaderStatus status, object? data) =>
             {
                 switch (status)
