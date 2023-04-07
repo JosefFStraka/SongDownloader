@@ -56,7 +56,7 @@ namespace SongDownloader
     static class Program
     {
         private static readonly HttpClient client = new HttpClient();
-        private static string PathToFolder = @"C:\Users\straj\Desktop\songs";
+        private static string PathToFolder = "";
         private static SemaphoreSlim semaphoreSlim = new(10,10);
 
         private static int Downloaded = 0;
@@ -64,12 +64,13 @@ namespace SongDownloader
 
         public static async Task<int> Main(string[] args)
         {
-            if (args.Length != 1)
+            if (args.Length != 2)
             {
                 return 1;
             }
 
             string[] lines = File.ReadAllLines(args[0]);
+            PathToFolder = args[1];
 
 
             Downloaded = 0;
