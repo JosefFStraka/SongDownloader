@@ -128,12 +128,25 @@ namespace SongDownloader
 
             List<Task> downloadTasks = new List<Task>();
 
+            List<string> files = Directory.EnumerateFiles(pathToDownloadFolder).Select(s => Path.GetFileNameWithoutExtension(s)).ToList();
+
             for (int i = 0; i < lines.Length; i++)
             {
                 string songName = lines[i];
 
                 if (String.IsNullOrEmpty(songName))
                     continue;
+
+                if (files.Contains(songName))
+                {
+                    string fullFilePath = Path.Combine(pathToDownloadFolder, $"{songName}.mp3");
+                    FileInfo fi = new FileInfo(fullFilePath);
+                    if (fi.Length > 0)
+                    {
+                        Console.WriteLine($"Skipping: {songName}");
+                        continue;
+                    }
+                }
 
                 downloadTasks.Add(Task.Run(async () =>
                 {
