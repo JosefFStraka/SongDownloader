@@ -62,9 +62,14 @@ namespace SongDownloader
         private static int Downloaded = 0;
         private static int Total = 0;
 
-        public static async Task Main(string[] args)
+        public static async Task<int> Main(string[] args)
         {
-            string[] lines = File.ReadAllLines(args[1]);
+            if (args.Length != 1)
+            {
+                return 1;
+            }
+
+            string[] lines = File.ReadAllLines(args[0]);
 
 
             Downloaded = 0;
@@ -86,6 +91,8 @@ namespace SongDownloader
 
             Console.WriteLine($"Download finished {Downloaded}/{Total}.");
             Console.ReadLine();
+
+            return 0;
         }
 
         private static async Task<bool> DownloadSong(string songName)
