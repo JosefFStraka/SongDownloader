@@ -102,7 +102,29 @@ namespace SongDownloader
 
             string[] lines = File.ReadAllLines(pathToSongListFile);
 
-            Downloader Downloader = new(pathToDownloadFolder, 5);
+            Downloader Downloader = new(pathToDownloadFolder, 1);
+            Downloader.DownloadProgressStatus += (string songName, DownloaderStatus status, object? data) =>
+            {
+                switch (status)
+                {
+                    case DownloaderStatus.StatusStarted:
+                        Console.WriteLine($"Downloading: {songName}");
+                        break;
+                    case DownloaderStatus.StatusFinished:
+                        Console.WriteLine($"Downloaded: {songName}");
+                        break;
+                    case DownloaderStatus.StatusFailed:
+                        Exception? ex = (data as Exception);
+                        string e = ex?.Message ?? "";
+                        Console.WriteLine($"Error downloading song: {songName} ({e})");
+                        break;
+                    case DownloaderStatus.StatusNotFound:
+                        Console.WriteLine($"Song not found: {songName}");
+                        break;
+                    default:
+                        break;
+                }
+            };
 
             List<Task> downloadTasks = new List<Task>();
 
@@ -113,7 +135,17 @@ namespace SongDownloader
                 if (String.IsNullOrEmpty(songName))
                     continue;
 
-                downloadTasks.Add(Downloader.DownloadSong(songName));
+                downloadTasks.Add(Task.Run(async () =>
+                {
+                    try
+                    {
+                        await Downloader.DownloadSong(songName);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Critical error: {songName} ({ex.Message})");
+                    }
+                }));
             }
 
             await Task.WhenAll(downloadTasks);
@@ -123,5 +155,6 @@ namespace SongDownloader
 
             return 0;
         }
+
     }
 }

@@ -16,19 +16,27 @@ namespace SongDownloader
         }
     }
 
+    enum DownloaderStatus
+    {
+        StatusStarted = 0,
+        StatusFinished,
+        StatusFailed,
+        StatusNotFound,
+    }
+
     internal class Downloader
     {
         public delegate void DownloadProgressChangedEventHandler(string songName, int progressPercentage);
-        public event DownloadProgressChangedEventHandler DownloadProgressChanged;
+        public event DownloadProgressChangedEventHandler? DownloadProgressChanged;
 
-        public delegate void DownloadProgressStatusEventHandler(string songName, int status);
-        public event DownloadProgressStatusEventHandler DownloadProgressStatus;
+        public delegate void DownloadProgressStatusEventHandler(string songName, DownloaderStatus status, object? data = null);
+        public event DownloadProgressStatusEventHandler? DownloadProgressStatus;
 
         private static string PathToDownloadFolder = "";
 
         private static readonly HttpClient client = new HttpClient();
 
-        private SemaphoreSlim semaphoreSlim = new(10, 10);
+        private SemaphoreSlim semaphoreSlim = new(3, 3);
 
         public Downloader(string PathToDownloadFolder, int maxThreads)
         {
@@ -48,8 +56,8 @@ namespace SongDownloader
             try
             {
                 Interlocked.Increment(ref _total);
-
-                Console.WriteLine($"{songName}: Downloading");
+                
+                DownloadProgressStatus?.Invoke(songName, DownloaderStatus.StatusStarted);
 
                 SongData? song = await SearchSong(songName);
 
@@ -64,19 +72,16 @@ namespace SongDownloader
                             TagSong(song, fullFilePath);
 
                         Interlocked.Increment(ref _downloaded);
-                        DownloadProgressStatus.Invoke(songName, 0);
-                        Console.WriteLine($"{songName}: Downloaded \"{songFileName}\"");
+                        DownloadProgressStatus?.Invoke(songName, DownloaderStatus.StatusFinished);
                     }
                     catch (Exception ex)
                     {
-                        DownloadProgressStatus.Invoke(songName, 1);
-                        Console.WriteLine($"{songName}: Error downloading song ({ex.Message})");
+                        DownloadProgressStatus?.Invoke(songName, DownloaderStatus.StatusFailed, ex);
                     }
                 }
                 else
                 {
-                    DownloadProgressStatus.Invoke(songName, 2);
-                    Console.WriteLine($"{songName}: Song not found");
+                    DownloadProgressStatus?.Invoke(songName, DownloaderStatus.StatusNotFound);
                 }
             }
             catch (Exception)
@@ -93,6 +98,7 @@ namespace SongDownloader
 
         public async Task<bool> DownloadSongWithProgressAsync(string songUrl, string savePath, string songName)
         {
+            int oldProgressPercentage = -1;
             using (HttpClient client = new HttpClient())
             {
                 using (HttpResponseMessage response = await client.GetAsync(songUrl, HttpCompletionOption.ResponseHeadersRead))
@@ -116,12 +122,16 @@ namespace SongDownloader
                                 if (totalBytes.HasValue)
                                 {
                                     int progressPercentage = (int)Math.Round((double)totalBytesRead / totalBytes.Value * 100);
-                                    DownloadProgressChanged.Invoke(songName, progressPercentage);
+                                    if (oldProgressPercentage != progressPercentage)
+                                    {
+                                        //DownloadProgressChanged?.Invoke(songName, progressPercentage);
+                                        oldProgressPercentage = progressPercentage;
+                                    }
                                     //Console.Write($"\rDownloading {Path.GetFileName(savePath)}: {progressPercentage}%");
                                 }
                                 else
                                 {
-                                    DownloadProgressChanged.Invoke(songName, 100);
+                                    //DownloadProgressChanged?.Invoke(songName, 100);
                                     //Console.Write($"\rDownloading {Path.GetFileName(savePath)}: {totalBytesRead / 1024} KB");
                                 }
                             }
