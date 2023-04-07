@@ -1,13 +1,4 @@
-﻿using System.Diagnostics;
-using System.Diagnostics.Metrics;
-using System.IO;
-using System.Net;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
-using System.Threading;
-
-namespace SongDownloader
+﻿namespace SongDownloader
 {
     public class Rootobject
     {
@@ -128,7 +119,7 @@ namespace SongDownloader
 
             List<Task> downloadTasks = new List<Task>();
 
-            List<string> files = Directory.EnumerateFiles(pathToDownloadFolder).Select(s => Path.GetFileNameWithoutExtension(s)).ToList();
+            List<string> files = Directory.EnumerateFiles(pathToDownloadFolder).Select(s => Path.GetFileNameWithoutExtension(s).EncodeAsFileName()).ToList();
 
             for (int i = 0; i < lines.Length; i++)
             {
